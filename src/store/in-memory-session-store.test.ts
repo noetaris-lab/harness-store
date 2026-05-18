@@ -5,6 +5,7 @@ import { BranchNotFoundError } from '../errors.js'
 
 function makeRun(overrides: Partial<StoredRun> = {}): StoredRun {
   return {
+    agentId: 'a1',
     runId: 'run-default',
     sessionId: 's-default',
     startedAt: new Date().toISOString(),
@@ -25,7 +26,7 @@ describe('InMemorySessionStore', () => {
       const store = new InMemorySessionStore()
 
       // act
-      const result = await store.load('s1')
+      const result = await store.load('a1', 's1')
 
       // assert
       expect(result).toBeNull()
@@ -35,10 +36,10 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const result = await store.load('s1')
+      const result = await store.load('a1', 's1')
 
       // assert
       expect(result).toEqual(r1)
@@ -49,11 +50,11 @@ describe('InMemorySessionStore', () => {
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
       const r2 = makeRun({ runId: 'run-b', sessionId: 's1' })
-      await store.save('s1', r1)
-      await store.save('s1', r2)
+      await store.save('a1', 's1', r1)
+      await store.save('a1', 's1', r2)
 
       // act
-      const result = await store.load('s1')
+      const result = await store.load('a1', 's1')
 
       // assert
       expect(result).toEqual(r2)
@@ -63,11 +64,11 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const s2Result = await store.load('s2')
-      const s1Result = await store.load('s1')
+      const s2Result = await store.load('a1', 's2')
+      const s1Result = await store.load('a1', 's1')
 
       // assert
       expect(s2Result).toBeNull()
@@ -84,10 +85,10 @@ describe('InMemorySessionStore', () => {
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
 
       // act
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // assert
-      expect(await store.load('s1')).toEqual(r1)
+      expect(await store.load('a1', 's1')).toEqual(r1)
     })
 
     it('appends both runs to history in insertion order', async () => {
@@ -95,11 +96,11 @@ describe('InMemorySessionStore', () => {
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
       const r2 = makeRun({ runId: 'run-b', sessionId: 's1' })
-      await store.save('s1', r1)
-      await store.save('s1', r2)
+      await store.save('a1', 's1', r1)
+      await store.save('a1', 's1', r2)
 
       // act
-      const history = await store.loadHistory('s1')
+      const history = await store.loadHistory('a1', 's1')
 
       // assert
       expect(history).toHaveLength(2)
@@ -111,10 +112,10 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const result = await store.load('s2')
+      const result = await store.load('a1', 's2')
 
       // assert
       expect(result).toBeNull()
@@ -129,7 +130,7 @@ describe('InMemorySessionStore', () => {
       const store = new InMemorySessionStore()
 
       // act
-      const result = await store.loadHistory('s1')
+      const result = await store.loadHistory('a1', 's1')
 
       // assert
       expect(result).toEqual([])
@@ -139,10 +140,10 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const result = await store.loadHistory('s1')
+      const result = await store.loadHistory('a1', 's1')
 
       // assert
       expect(result).toEqual([r1])
@@ -154,12 +155,12 @@ describe('InMemorySessionStore', () => {
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
       const r2 = makeRun({ runId: 'run-b', sessionId: 's1' })
       const r3 = makeRun({ runId: 'run-c', sessionId: 's1' })
-      await store.save('s1', r1)
-      await store.save('s1', r2)
-      await store.save('s1', r3)
+      await store.save('a1', 's1', r1)
+      await store.save('a1', 's1', r2)
+      await store.save('a1', 's1', r3)
 
       // act
-      const result = await store.loadHistory('s1')
+      const result = await store.loadHistory('a1', 's1')
 
       // assert
       expect(result).toEqual([r1, r2, r3])
@@ -170,12 +171,12 @@ describe('InMemorySessionStore', () => {
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
       const r2 = makeRun({ runId: 'run-b', sessionId: 's1' })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const first = await store.loadHistory('s1')
+      const first = await store.loadHistory('a1', 's1')
       first.push(r2)
-      const second = await store.loadHistory('s1')
+      const second = await store.loadHistory('a1', 's1')
 
       // assert
       expect(second).toEqual([r1])
@@ -186,11 +187,11 @@ describe('InMemorySessionStore', () => {
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
       const r2 = makeRun({ runId: 'run-b', sessionId: 's2' })
-      await store.save('s1', r1)
-      await store.save('s2', r2)
+      await store.save('a1', 's1', r1)
+      await store.save('a1', 's2', r2)
 
       // act
-      const result = await store.loadHistory('s1')
+      const result = await store.loadHistory('a1', 's1')
 
       // assert
       expect(result).toEqual([r1])
@@ -205,7 +206,7 @@ describe('InMemorySessionStore', () => {
       const store = new InMemorySessionStore()
 
       // act
-      const result = store.branch('s1', 'run-x')
+      const result = store.branch('a1', 's1', 'run-x')
 
       // assert
       await expect(result).rejects.toThrow(BranchNotFoundError)
@@ -215,24 +216,24 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const result = store.branch('s1', 'run-b')
+      const result = store.branch('a1', 's1', 'run-b')
 
       // assert
       await expect(result).rejects.toThrow(BranchNotFoundError)
-      expect(await store.loadHistory('s1')).toEqual([r1])
+      expect(await store.loadHistory('a1', 's1')).toEqual([r1])
     })
 
     it('returns a new UUID v4 string different from the source session ID', async () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 42 } })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const newSessionId = await store.branch('s1', 'run-a')
+      const newSessionId = await store.branch('a1', 's1', 'run-a')
 
       // assert
       expect(newSessionId).not.toBe('s1')
@@ -243,11 +244,11 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 42 } })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const newSessionId = await store.branch('s1', 'run-a')
-      const loaded = await store.load(newSessionId)
+      const newSessionId = await store.branch('a1', 's1', 'run-a')
+      const loaded = await store.load('a1', newSessionId)
 
       // assert
       expect(loaded).not.toBeNull()
@@ -259,11 +260,11 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 42 } })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const newSessionId = await store.branch('s1', 'run-a')
-      const loaded = await store.load(newSessionId)
+      const newSessionId = await store.branch('a1', 's1', 'run-a')
+      const loaded = await store.load('a1', newSessionId)
 
       // assert
       expect(loaded!.sessionId).toBe(newSessionId)
@@ -274,11 +275,11 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 42 } })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const newSessionId = await store.branch('s1', 'run-a')
-      const history = await store.loadHistory(newSessionId)
+      const newSessionId = await store.branch('a1', 's1', 'run-a')
+      const history = await store.loadHistory('a1', newSessionId)
 
       // assert
       expect(history).toHaveLength(1)
@@ -290,12 +291,12 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 1 } })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      await store.branch('s1', 'run-a')
-      const sourceHistory = await store.loadHistory('s1')
-      const sourceLatest = await store.load('s1')
+      await store.branch('a1', 's1', 'run-a')
+      const sourceHistory = await store.loadHistory('a1', 's1')
+      const sourceLatest = await store.load('a1', 's1')
 
       // assert
       expect(sourceHistory).toEqual([r1])
@@ -307,12 +308,12 @@ describe('InMemorySessionStore', () => {
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 1 } })
       const r2 = makeRun({ runId: 'run-b', sessionId: 's1', finalState: { x: 99 } })
-      await store.save('s1', r1)
-      await store.save('s1', r2)
+      await store.save('a1', 's1', r1)
+      await store.save('a1', 's1', r2)
 
       // act
-      const newSessionId = await store.branch('s1', 'run-a')
-      const loaded = await store.load(newSessionId)
+      const newSessionId = await store.branch('a1', 's1', 'run-a')
+      const loaded = await store.load('a1', newSessionId)
 
       // assert
       expect(loaded!.finalState).toEqual({ x: 1 })
@@ -322,11 +323,11 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 42 } })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const newSessionId = await store.branch('s1', 'run-a')
-      const loaded = await store.load(newSessionId)
+      const newSessionId = await store.branch('a1', 's1', 'run-a')
+      const loaded = await store.load('a1', newSessionId)
 
       // assert
       expect(loaded!.initialState).toEqual(loaded!.finalState)
@@ -337,11 +338,11 @@ describe('InMemorySessionStore', () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: {} })
-      await store.save('s1', r1)
+      await store.save('a1', 's1', r1)
 
       // act
-      const newSessionId = await store.branch('s1', 'run-a')
-      const loaded = await store.load(newSessionId)
+      const newSessionId = await store.branch('a1', 's1', 'run-a')
+      const loaded = await store.load('a1', newSessionId)
 
       // assert
       expect(loaded!.startedAt).toBeTruthy()

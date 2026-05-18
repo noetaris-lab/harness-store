@@ -8,23 +8,28 @@ export class InMemorySessionStore implements SessionStore {
 
   constructor() { /* no-op */ }
 
-  async load(sessionId: string): Promise<StoredRun | null> {
-    return this.latest.get(sessionId) ?? null
+  private key(agentId: string, sessionId: string): string {
+    return `${agentId}\0${sessionId}`
   }
 
-  async save(sessionId: string, run: StoredRun): Promise<void> {
-    this.latest.set(sessionId, run)
-    const runs = this.history.get(sessionId) ?? []
+  async load(agentId: string, sessionId: string): Promise<StoredRun | null> {
+    return this.latest.get(this.key(agentId, sessionId)) ?? null
+  }
+
+  async save(agentId: string, sessionId: string, run: StoredRun): Promise<void> {
+    const k = this.key(agentId, sessionId)
+    this.latest.set(k, run)
+    const runs = this.history.get(k) ?? []
     runs.push(run)
-    this.history.set(sessionId, runs)
+    this.history.set(k, runs)
   }
 
-  async loadHistory(sessionId: string): Promise<StoredRun[]> {
-    return [...(this.history.get(sessionId) ?? [])]
+  async loadHistory(agentId: string, sessionId: string): Promise<StoredRun[]> {
+    return [...(this.history.get(this.key(agentId, sessionId)) ?? [])]
   }
 
-  async branch(sessionId: string, runId: string): Promise<string> {
-    const runs = this.history.get(sessionId) ?? []
+  async branch(agentId: string, sessionId: string, runId: string): Promise<string> {
+    const runs = this.history.get(this.key(agentId, sessionId)) ?? []
     const source = runs.find(entry => entry.runId === runId)
 
     if (source === undefined) {
@@ -35,6 +40,7 @@ export class InMemorySessionStore implements SessionStore {
     const now = new Date().toISOString()
 
     const synthetic: StoredRun = {
+      agentId,
       runId: randomUUID(),
       sessionId: newSessionId,
       startedAt: now,
@@ -44,7 +50,7 @@ export class InMemorySessionStore implements SessionStore {
       finalState: source.finalState,
     }
 
-    await this.save(newSessionId, synthetic)
+    await this.save(agentId, newSessionId, synthetic)
     return newSessionId
   }
 }
