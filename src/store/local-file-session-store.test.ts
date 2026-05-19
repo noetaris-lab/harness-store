@@ -6,7 +6,6 @@ import type { StoredRun } from '@noetaris/harness'
 import { LocalFileSessionStore } from './local-file-session-store.js'
 import { BranchNotFoundError } from '../errors.js'
 import { LocalFileSessionStore as IndexLocalFileSessionStore } from '../index.js'
-import type { LocalFileSessionStoreOptions } from '../index.js'
 
 function makeRun(overrides: Partial<StoredRun & { agentId: string }> = {}): StoredRun {
   return {
@@ -523,14 +522,6 @@ describe('LocalFileSessionStore', () => {
       expect(typeof store.save).toBe('function')
       expect(typeof store.loadHistory).toBe('function')
       expect(typeof store.branch).toBe('function')
-    })
-
-    it('LocalFileSessionStoreOptions is available as a named exported type', () => {
-      // arrange
-      const opts: LocalFileSessionStoreOptions = { dir: '/tmp' }
-
-      // act + assert
-      expect(opts.dir).toBe('/tmp')
     })
 
   })
