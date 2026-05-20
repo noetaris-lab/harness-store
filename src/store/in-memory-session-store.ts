@@ -2,6 +2,20 @@ import type { SessionStore, StoredRun } from '@noetaris/harness'
 import { randomUUID } from 'node:crypto'
 import { BranchNotFoundError } from '../errors.js'
 
+/**
+ * In-process {@link SessionStore} backed by plain `Map` instances.
+ *
+ * Suitable for development, testing, and single-process deployments.
+ * State is lost when the process exits — use {@link LocalFileSessionStore}
+ * or a database-backed store for durable persistence.
+ *
+ * Supports the full optional API: `loadHistory` and `branch`.
+ *
+ * @example
+ * ```ts
+ * const h = createHarness<Ctx>()().store({ session: new InMemorySessionStore() })
+ * ```
+ */
 export class InMemorySessionStore implements SessionStore {
   private readonly latest = new Map<string, StoredRun>()
   private readonly history = new Map<string, StoredRun[]>()

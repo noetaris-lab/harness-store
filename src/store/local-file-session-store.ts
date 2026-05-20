@@ -4,12 +4,30 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { BranchNotFoundError } from '../errors.js'
 
+/** Options for {@link LocalFileSessionStore}. */
 export interface LocalFileSessionStoreOptions {
-  /** Absolute or relative path to the directory where session files are stored.
-   *  The directory must already exist — the constructor does not create it. */
+  /**
+   * Absolute or relative path to the directory where session files are stored.
+   * The directory must already exist — the constructor does not create it.
+   */
   readonly dir: string
 }
 
+/**
+ * File-system {@link SessionStore} that persists each session as a JSONL file
+ * named `<agentId>_<sessionId>.jsonl` under the configured directory.
+ *
+ * Each `save()` appends a new line; `load()` reads the last line; `loadHistory()`
+ * reads all lines. No locking is performed — suitable for single-process use.
+ *
+ * Supports the full optional API: `loadHistory` and `branch`.
+ *
+ * @example
+ * ```ts
+ * const store = new LocalFileSessionStore({ dir: '/var/data/sessions' })
+ * const h = createHarness<Ctx>()().store({ session: store })
+ * ```
+ */
 export class LocalFileSessionStore implements SessionStore {
   private readonly dir: string
 
