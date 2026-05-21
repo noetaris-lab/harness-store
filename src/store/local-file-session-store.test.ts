@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { StoredRun } from '@noetaris/harness'
 import { LocalFileSessionStore } from './local-file-session-store.js'
+import { ConcurrentModificationError } from '../errors.js'
 import { BranchNotFoundError } from '../errors.js'
 import { LocalFileSessionStore as IndexLocalFileSessionStore } from '../index.js'
 
@@ -12,6 +13,7 @@ function makeRun(overrides: Partial<StoredRun & { agentId: string }> = {}): Stor
     agentId: 'agent-default',
     runId: 'run-default',
     sessionId: 's-default',
+    version: 0,
     startedAt: new Date().toISOString(),
     settledAt: new Date().toISOString(),
     phase: 'completed',
@@ -51,11 +53,11 @@ describe('LocalFileSessionStore', () => {
     it('normalizes trailing slash on dir (no double slash in path)', async () => {
       // arrange
       const store = new LocalFileSessionStore({ dir: tmpDir + '/' })
-      const r1 = makeRun({ agentId: 'myAgent', sessionId: 'abc123' })
-      await store.save('myAgent', 'abc123', r1)
+      const r1 = makeRun({ agentId: 'myAgent', sessionId: 'abc123-slash' })
+      await store.save('myAgent', 'abc123-slash', r1)
 
       // act
-      const exists = await access(join(tmpDir, 'myAgent_abc123.jsonl')).then(() => true).catch(() => false)
+      const exists = await access(join(tmpDir, 'myAgent_abc123-slash.jsonl')).then(() => true).catch(() => false)
 
       // assert
       expect(exists).toBe(true)
@@ -92,8 +94,8 @@ describe('LocalFileSessionStore', () => {
     it('returns the most recently saved run when multiple runs exist', async () => {
       // arrange
       const store = new LocalFileSessionStore({ dir: tmpDir })
-      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-2-3', runId: 'run-a' })
-      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-2-3', runId: 'run-b' })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-2-3', runId: 'run-a', version: 0 })
+      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-2-3', runId: 'run-b', version: 1 })
       await store.save('agentA', 'sess-2-3', r1)
       await store.save('agentA', 'sess-2-3', r2)
 
@@ -137,8 +139,8 @@ describe('LocalFileSessionStore', () => {
     it('ignores trailing empty lines and returns the last non-empty line', async () => {
       // arrange
       const store = new LocalFileSessionStore({ dir: tmpDir })
-      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-2-6', runId: 'run-a' })
-      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-2-6', runId: 'run-b' })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-2-6', runId: 'run-a', version: 0 })
+      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-2-6', runId: 'run-b', version: 1 })
       await store.save('agentA', 'sess-2-6', r1)
       await store.save('agentA', 'sess-2-6', r2)
 
@@ -171,8 +173,8 @@ describe('LocalFileSessionStore', () => {
     it('appends a second run to the existing file; both lines present in order', async () => {
       // arrange
       const store = new LocalFileSessionStore({ dir: tmpDir })
-      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-3-2', runId: 'run-a' })
-      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-3-2', runId: 'run-b' })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-3-2', runId: 'run-a', version: 0 })
+      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-3-2', runId: 'run-b', version: 1 })
       await store.save('agentA', 'sess-3-2', r1)
 
       // act
@@ -198,6 +200,37 @@ describe('LocalFileSessionStore', () => {
       const content = await readFile(join(tmpDir, 'agentA_sess-3-3.jsonl'), 'utf8')
       const lines = content.split('\n').filter(l => l.length > 0)
       expect(JSON.parse(lines[0]!)).toEqual(r1)
+    })
+
+    it('throws ConcurrentModificationError when version skips (0 → 2 without 1)', async () => {
+      // arrange
+      const store = new LocalFileSessionStore({ dir: tmpDir })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-cas-1', runId: 'run-a', version: 0 })
+      await store.save('agentA', 'sess-cas-1', r1)
+      const stale = makeRun({ agentId: 'agentA', sessionId: 'sess-cas-1', runId: 'run-b', version: 2 })
+
+      // act + assert
+      await expect(store.save('agentA', 'sess-cas-1', stale)).rejects.toBeInstanceOf(ConcurrentModificationError)
+    })
+
+    it('throws ConcurrentModificationError when writing version 0 to an existing session', async () => {
+      // arrange
+      const store = new LocalFileSessionStore({ dir: tmpDir })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-cas-2', runId: 'run-a', version: 0 })
+      await store.save('agentA', 'sess-cas-2', r1)
+      const duplicate = makeRun({ agentId: 'agentA', sessionId: 'sess-cas-2', runId: 'run-b', version: 0 })
+
+      // act + assert
+      await expect(store.save('agentA', 'sess-cas-2', duplicate)).rejects.toBeInstanceOf(ConcurrentModificationError)
+    })
+
+    it('throws ConcurrentModificationError when first write uses version > 0 (no prior file)', async () => {
+      // arrange
+      const store = new LocalFileSessionStore({ dir: tmpDir })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-cas-3', runId: 'run-a', version: 1 })
+
+      // act + assert
+      await expect(store.save('agentA', 'sess-cas-3', r1)).rejects.toBeInstanceOf(ConcurrentModificationError)
     })
 
     it('does not write to other sessions\' files', async () => {
@@ -252,9 +285,9 @@ describe('LocalFileSessionStore', () => {
     it('returns all runs in insertion order with three saves', async () => {
       // arrange
       const store = new LocalFileSessionStore({ dir: tmpDir })
-      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-4-3', runId: 'run-a' })
-      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-4-3', runId: 'run-b' })
-      const r3 = makeRun({ agentId: 'agentA', sessionId: 'sess-4-3', runId: 'run-c' })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-4-3', runId: 'run-a', version: 0 })
+      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-4-3', runId: 'run-b', version: 1 })
+      const r3 = makeRun({ agentId: 'agentA', sessionId: 'sess-4-3', runId: 'run-c', version: 2 })
       await store.save('agentA', 'sess-4-3', r1)
       await store.save('agentA', 'sess-4-3', r2)
       await store.save('agentA', 'sess-4-3', r3)
@@ -430,8 +463,8 @@ describe('LocalFileSessionStore', () => {
     it('branches from the correct run when multiple runs are in history', async () => {
       // arrange
       const store = new LocalFileSessionStore({ dir: tmpDir })
-      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-6-7', runId: 'run-a', finalState: { x: 1 } })
-      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-6-7', runId: 'run-b', finalState: { x: 99 } })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-6-7', runId: 'run-a', version: 0, finalState: { x: 1 } })
+      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-6-7', runId: 'run-b', version: 1, finalState: { x: 99 } })
       await store.save('agentA', 'sess-6-7', r1)
       await store.save('agentA', 'sess-6-7', r2)
 
@@ -496,8 +529,8 @@ describe('LocalFileSessionStore', () => {
     it('loadHistory on a new store instance returns all runs saved by the previous instance', async () => {
       // arrange
       const store1 = new LocalFileSessionStore({ dir: tmpDir })
-      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-7-2', runId: 'run-a' })
-      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-7-2', runId: 'run-b' })
+      const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-7-2', runId: 'run-a', version: 0 })
+      const r2 = makeRun({ agentId: 'agentA', sessionId: 'sess-7-2', runId: 'run-b', version: 1 })
       await store1.save('agentA', 'sess-7-2', r1)
       await store1.save('agentA', 'sess-7-2', r2)
 

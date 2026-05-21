@@ -2,7 +2,7 @@ import type { SessionStore, StoredRun } from '@noetaris/harness'
 import { appendFile, readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { BranchNotFoundError } from '../errors.js'
+import { BranchNotFoundError, ConcurrentModificationError } from '../errors.js'
 
 /** Options for {@link LocalFileSessionStore}. */
 export interface LocalFileSessionStoreOptions {
@@ -55,6 +55,11 @@ export class LocalFileSessionStore implements SessionStore {
   }
 
   async save(agentId: string, sessionId: string, run: StoredRun): Promise<void> {
+    const current = await this.load(agentId, sessionId)
+    const expectedVersion = current !== null ? current.version + 1 : 0
+    if (run.version !== expectedVersion) {
+      throw new ConcurrentModificationError(sessionId, run.version, current?.version ?? -1)
+    }
     await appendFile(this.filePath(agentId, sessionId), JSON.stringify(run) + '\n')
   }
 
@@ -85,6 +90,7 @@ export class LocalFileSessionStore implements SessionStore {
       agentId,
       runId: randomUUID(),
       sessionId: newSessionId,
+      version: 0,
       startedAt: now,
       settledAt: now,
       phase: 'completed',

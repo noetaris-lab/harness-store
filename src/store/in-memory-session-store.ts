@@ -1,6 +1,6 @@
 import type { SessionStore, StoredRun } from '@noetaris/harness'
 import { randomUUID } from 'node:crypto'
-import { BranchNotFoundError } from '../errors.js'
+import { BranchNotFoundError, ConcurrentModificationError } from '../errors.js'
 
 /**
  * In-process {@link SessionStore} backed by plain `Map` instances.
@@ -32,6 +32,15 @@ export class InMemorySessionStore implements SessionStore {
 
   async save(agentId: string, sessionId: string, run: StoredRun): Promise<void> {
     const k = this.key(agentId, sessionId)
+    const current = this.latest.get(k)
+    const expectedVersion = current !== undefined ? current.version + 1 : 0
+    if (run.version !== expectedVersion) {
+      throw new ConcurrentModificationError(
+        sessionId,
+        run.version,
+        current?.version ?? -1,
+      )
+    }
     this.latest.set(k, run)
     const runs = this.history.get(k) ?? []
     runs.push(run)
@@ -57,6 +66,7 @@ export class InMemorySessionStore implements SessionStore {
       agentId,
       runId: randomUUID(),
       sessionId: newSessionId,
+      version: 0,
       startedAt: now,
       settledAt: now,
       phase: 'completed',

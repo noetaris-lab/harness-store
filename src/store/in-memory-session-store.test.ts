@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import type { StoredRun } from '@noetaris/harness'
 import { InMemorySessionStore } from './in-memory-session-store.js'
-import { BranchNotFoundError } from '../errors.js'
+import { BranchNotFoundError, ConcurrentModificationError } from '../errors.js'
 
 function makeRun(overrides: Partial<StoredRun> = {}): StoredRun {
   return {
     agentId: 'a1',
     runId: 'run-default',
     sessionId: 's-default',
+    version: 0,
     startedAt: new Date().toISOString(),
     settledAt: new Date().toISOString(),
     phase: 'completed',
@@ -48,8 +49,8 @@ describe('InMemorySessionStore', () => {
     it('returns the most recently saved run when multiple runs exist', async () => {
       // arrange
       const store = new InMemorySessionStore()
-      const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
-      const r2 = makeRun({ runId: 'run-b', sessionId: 's1' })
+      const r1 = makeRun({ runId: 'run-a', sessionId: 's1', version: 0 })
+      const r2 = makeRun({ runId: 'run-b', sessionId: 's1', version: 1 })
       await store.save('a1', 's1', r1)
       await store.save('a1', 's1', r2)
 
@@ -94,8 +95,8 @@ describe('InMemorySessionStore', () => {
     it('appends both runs to history in insertion order', async () => {
       // arrange
       const store = new InMemorySessionStore()
-      const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
-      const r2 = makeRun({ runId: 'run-b', sessionId: 's1' })
+      const r1 = makeRun({ runId: 'run-a', sessionId: 's1', version: 0 })
+      const r2 = makeRun({ runId: 'run-b', sessionId: 's1', version: 1 })
       await store.save('a1', 's1', r1)
       await store.save('a1', 's1', r2)
 
@@ -119,6 +120,52 @@ describe('InMemorySessionStore', () => {
 
       // assert
       expect(result).toBeNull()
+    })
+
+    it('throws ConcurrentModificationError when version skips (0 → 2 without 1)', async () => {
+      // arrange
+      const store = new InMemorySessionStore()
+      const r1 = makeRun({ runId: 'run-a', sessionId: 's1', version: 0 })
+      await store.save('a1', 's1', r1)
+      const stale = makeRun({ runId: 'run-b', sessionId: 's1', version: 2 })
+
+      // act + assert
+      await expect(store.save('a1', 's1', stale)).rejects.toBeInstanceOf(ConcurrentModificationError)
+    })
+
+    it('throws ConcurrentModificationError when writing version 0 to a session that already has version 0', async () => {
+      // arrange
+      const store = new InMemorySessionStore()
+      const r1 = makeRun({ runId: 'run-a', sessionId: 's1', version: 0 })
+      await store.save('a1', 's1', r1)
+      const duplicate = makeRun({ runId: 'run-b', sessionId: 's1', version: 0 })
+
+      // act + assert
+      await expect(store.save('a1', 's1', duplicate)).rejects.toBeInstanceOf(ConcurrentModificationError)
+    })
+
+    it('throws ConcurrentModificationError with correct sessionId, attemptedVersion, storedVersion', async () => {
+      // arrange
+      const store = new InMemorySessionStore()
+      const r1 = makeRun({ runId: 'run-a', sessionId: 'sess-x', version: 0 })
+      await store.save('a1', 'sess-x', r1)
+      const stale = makeRun({ runId: 'run-b', sessionId: 'sess-x', version: 0 })
+
+      // act + assert
+      const err = await store.save('a1', 'sess-x', stale).catch(e => e)
+      expect(err).toBeInstanceOf(ConcurrentModificationError)
+      expect((err as ConcurrentModificationError).sessionId).toBe('sess-x')
+      expect((err as ConcurrentModificationError).attemptedVersion).toBe(0)
+      expect((err as ConcurrentModificationError).storedVersion).toBe(0)
+    })
+
+    it('throws ConcurrentModificationError when first write uses version > 0 (no prior record)', async () => {
+      // arrange
+      const store = new InMemorySessionStore()
+      const r1 = makeRun({ runId: 'run-a', sessionId: 's1', version: 1 })
+
+      // act + assert
+      await expect(store.save('a1', 's1', r1)).rejects.toBeInstanceOf(ConcurrentModificationError)
     })
 
   })
@@ -152,9 +199,9 @@ describe('InMemorySessionStore', () => {
     it('returns all runs in insertion order oldest first', async () => {
       // arrange
       const store = new InMemorySessionStore()
-      const r1 = makeRun({ runId: 'run-a', sessionId: 's1' })
-      const r2 = makeRun({ runId: 'run-b', sessionId: 's1' })
-      const r3 = makeRun({ runId: 'run-c', sessionId: 's1' })
+      const r1 = makeRun({ runId: 'run-a', sessionId: 's1', version: 0 })
+      const r2 = makeRun({ runId: 'run-b', sessionId: 's1', version: 1 })
+      const r3 = makeRun({ runId: 'run-c', sessionId: 's1', version: 2 })
       await store.save('a1', 's1', r1)
       await store.save('a1', 's1', r2)
       await store.save('a1', 's1', r3)
@@ -306,8 +353,8 @@ describe('InMemorySessionStore', () => {
     it('branches from the correct run when multiple runs are in history', async () => {
       // arrange
       const store = new InMemorySessionStore()
-      const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 1 } })
-      const r2 = makeRun({ runId: 'run-b', sessionId: 's1', finalState: { x: 99 } })
+      const r1 = makeRun({ runId: 'run-a', sessionId: 's1', version: 0, finalState: { x: 1 } })
+      const r2 = makeRun({ runId: 'run-b', sessionId: 's1', version: 1, finalState: { x: 99 } })
       await store.save('a1', 's1', r1)
       await store.save('a1', 's1', r2)
 
