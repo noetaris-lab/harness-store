@@ -10,6 +10,24 @@ export class BranchNotFoundError extends Error {
 }
 
 /**
+ * Thrown by {@link SessionStore.extendClaim} when the claim key no longer
+ * exists or the nonce does not match.
+ *
+ * This means the lease has already expired (another instance may have claimed
+ * the session) or was released. The framework detects the actual expiry at the
+ * next step boundary via the local `lease.expiresAt` check.
+ */
+export class LeaseNotFoundError extends Error {
+  readonly sessionId: string
+
+  constructor(sessionId: string) {
+    super(`claim for session "${sessionId}" not found or nonce mismatch — lease may have expired`)
+    this.name = 'LeaseNotFoundError'
+    this.sessionId = sessionId
+  }
+}
+
+/**
  * Thrown by {@link SessionStore.save} implementations when the stored record's
  * version does not match the version in the provided `StoredRun`.
  *
