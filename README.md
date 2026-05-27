@@ -1,6 +1,6 @@
 # @noetaris/harness-store
 
-Session store implementations for [@noetaris/harness](../core). This package provides the `SessionStore` interface implementations needed to persist and manage agent execution state.
+Session store implementations for [@noetaris/harness](https://github.com/noetaris-lab/harness). This package provides the `SessionStore` interface implementations needed to persist and manage agent execution state.
 
 ## Overview
 
@@ -9,7 +9,10 @@ Session store implementations for [@noetaris/harness](../core). This package pro
 Currently provides:
 - **InMemorySessionStore** — In-memory implementation for development, testing, and ephemeral sessions
 - **LocalFileSessionStore** — File-system implementation that persists sessions as JSONL files, surviving process restarts
-- **RedisSessionStore** — Redis-backed implementation with atomic conditional save (Lua CAS) and distributed claim/lease via `SET NX PX` and Lua scripts. Suitable for multi-process, multi-machine deployments.
+
+For production deployments, use a dedicated store package:
+- [`@noetaris/harness-store-redis`](https://github.com/noetaris-lab/harness-store-redis) — Redis-backed store with atomic Lua CAS and distributed claim/lease
+- [`@noetaris/harness-store-postgres`](https://github.com/noetaris-lab/harness-store-postgres) — PostgreSQL-backed store with full history and branching support
 
 ## Installation
 
@@ -158,65 +161,6 @@ All methods have the same signatures as `InMemorySessionStore`. See [`load`](#lo
 - Multi-process or multi-machine deployments (concurrent writes to the same file are unsafe)
 - High-throughput workloads (file I/O per step)
 
-## `RedisSessionStore`
-
-A Redis-backed session store with atomic conditional save (Lua CAS) and full distributed claim/lease support. Designed for multi-process, multi-machine deployments.
-
-**Requires:** `ioredis` (already a runtime dependency of `@noetaris/harness-store`).
-
-### Quick Start
-
-```typescript
-import { RedisSessionStore } from '@noetaris/harness-store'
-import Redis from 'ioredis'
-
-const client = new Redis(process.env.REDIS_URL)
-const store = new RedisSessionStore({ client })
-```
-
-### Constructor
-
-```typescript
-new RedisSessionStore(options: RedisSessionStoreOptions)
-```
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `client` | `Redis` | required | A pre-constructed `ioredis` `Redis` instance. The store does not manage the connection lifecycle — connect before use, disconnect after. |
-| `prefix` | `string` | `"harness"` | Key prefix prepended to all Redis keys (e.g. `harness:runs:{agentId}:{sessionId}`). Empty string falls back to `"harness"`. |
-
-### Key Schema
-
-Two key types per session:
-- `{prefix}:runs:{agentId}:{sessionId}` — latest `StoredRun`, JSON-serialized
-- `{prefix}:claims:{agentId}:{sessionId}` — claim record with TTL (set by `claim`, deleted by `release`)
-
-### Distributed Concurrency
-
-`RedisSessionStore` implements the full two-layer hybrid concurrency model:
-
-- **Layer 1 — Optimistic locking (mandatory):** `save()` uses a Lua script to atomically compare the stored version before writing. Throws `ConcurrentModificationError` on mismatch.
-- **Layer 2 — Claim/lease (optional):** `claim()` uses `SET NX PX`; `release()` and `extendClaim()` use nonce-guarded Lua scripts. A random UUID nonce is generated at claim time and verified server-side — stale leases from previous claim periods cannot release or extend a new holder's lock.
-
-See [Distributed Deployment](../docs/distributed-deployment.md) for the full concurrency model.
-
-### Limitations
-
-- `loadHistory` and `branch` are not implemented — Redis stores only the latest run per session.
-- Redis Cluster topology with multi-key Lua scripts requires hash tags (out of scope).
-- Connection management is the caller's responsibility.
-
-### When to Use `RedisSessionStore`
-
-**Good for:**
-- Multi-process and multi-machine deployments
-- Production systems requiring durable, cross-instance session state
-- Deployments that need distributed locking (`claim`/`release`) to prevent concurrent runs on the same session
-
-**Not suitable for:**
-- Single-process development (use `InMemorySessionStore` instead)
-- Workloads requiring full session history (use `LocalFileSessionStore` or a database-backed store)
-
 ## Error Handling
 
 ### `BranchNotFoundError`
@@ -258,7 +202,7 @@ try {
 }
 ```
 
-Thrown by `InMemorySessionStore`, `LocalFileSessionStore`, and `RedisSessionStore`.
+Thrown by `InMemorySessionStore` and `LocalFileSessionStore`.
 
 ### `LeaseNotFoundError`
 
@@ -277,7 +221,7 @@ try {
 }
 ```
 
-Thrown by `RedisSessionStore`. The framework's `ctx.keepAlive()` handles this internally — callers of `ctx.keepAlive()` do not need to catch it.
+Thrown by custom `SessionStore` implementations that support the optional `extendClaim()` method. The framework's `ctx.keepAlive()` handles this internally — callers of `ctx.keepAlive()` do not need to catch it.
 
 ## When to Use `InMemorySessionStore`
 
@@ -292,7 +236,7 @@ Thrown by `RedisSessionStore`. The framework's `ctx.keepAlive()` handles this in
 - Multi-process deployments (data lost on restart)
 - Audit or compliance requirements
 
-For production use, implement `SessionStore` with your preferred storage backend (database, file system, cloud storage, etc.).
+For production use, see [`@noetaris/harness-store-redis`](https://github.com/noetaris-lab/harness-store-redis) (multi-process, distributed) or [`@noetaris/harness-store-postgres`](https://github.com/noetaris-lab/harness-store-postgres) (durable, full history).
 
 ## Implementing Custom Stores
 
