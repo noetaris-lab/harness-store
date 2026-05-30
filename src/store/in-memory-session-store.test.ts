@@ -287,7 +287,7 @@ describe('InMemorySessionStore', () => {
       expect(newSessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
     })
 
-    it('new session is seeded with source finalState and phase completed', async () => {
+    it('new session is seeded with source finalState and phase paused', async () => {
       // arrange
       const store = new InMemorySessionStore()
       const r1 = makeRun({ runId: 'run-a', sessionId: 's1', finalState: { x: 42 } })
@@ -300,7 +300,7 @@ describe('InMemorySessionStore', () => {
       // assert
       expect(loaded).not.toBeNull()
       expect(loaded!.finalState).toEqual({ x: 42 })
-      expect(loaded!.phase).toBe('completed')
+      expect(loaded!.phase).toBe('paused')
     })
 
     it('new session StoredRun has the correct sessionId and a distinct runId', async () => {

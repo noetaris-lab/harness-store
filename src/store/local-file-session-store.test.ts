@@ -382,7 +382,7 @@ describe('LocalFileSessionStore', () => {
       expect(newSessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
     })
 
-    it('new session file has synthetic record with correct finalState and phase completed', async () => {
+    it('new session file has synthetic record with correct finalState and phase paused', async () => {
       // arrange
       const store = new LocalFileSessionStore({ dir: tmpDir })
       const r1 = makeRun({ agentId: 'agentA', sessionId: 'sess-6-2', runId: 'run-a', finalState: { x: 42 } })
@@ -395,7 +395,7 @@ describe('LocalFileSessionStore', () => {
       // assert
       expect(loaded).not.toBeNull()
       expect(loaded!.finalState).toEqual({ x: 42 })
-      expect(loaded!.phase).toBe('completed')
+      expect(loaded!.phase).toBe('paused')
     })
 
     it('synthetic record has distinct runId and sessionId equal to newSessionId', async () => {

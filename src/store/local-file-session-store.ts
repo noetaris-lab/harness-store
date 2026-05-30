@@ -93,7 +93,7 @@ export class LocalFileSessionStore implements SessionStore {
       version: 0,
       startedAt: now,
       settledAt: now,
-      phase: 'completed',
+      phase: 'paused',
       initialState: source.finalState,
       finalState: source.finalState,
     }
