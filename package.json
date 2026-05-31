@@ -1,6 +1,6 @@
 {
   "name": "@noetaris/harness-store",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Session store implementations for @noetaris/harness",
   "type": "module",
   "repository": {
