@@ -20,11 +20,11 @@ For production deployments, use a dedicated store package:
 pnpm add @noetaris/harness-store
 ```
 
-Note: `@noetaris/harness` is required as a peer dependency.
-
-```bash
-pnpm add @noetaris/harness
-```
+This package has **zero runtime dependencies** — it does not declare `@noetaris/harness`
+as a peer dependency and does not require it at runtime. The store implementations
+satisfy the `SessionStore` contract via TypeScript structural typing, so `@noetaris/harness`
+is only needed at build time if you want its `SessionStore`/`StoredRun` types for your
+own code (install it as a dev dependency in that case).
 
 ## Quick Start
 
@@ -114,7 +114,7 @@ try {
 - `BranchNotFoundError` if the `runId` is not found in the source session's history
 
 **Behavior:**
-- Creates a synthetic `StoredRun` with `phase: 'completed'` and identical `initialState` and `finalState`
+- Creates a synthetic `StoredRun` with `phase: 'paused'` and identical `initialState` and `finalState`
 - The new session appears in its own history with a single run
 - The source session is unaffected
 

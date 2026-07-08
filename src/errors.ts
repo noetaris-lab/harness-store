@@ -1,3 +1,10 @@
+// NOTE: These store error classes are deliberately re-declared (byte-identically)
+// in each store package — @noetaris/harness-store, -store-postgres, -store-redis —
+// rather than shared from one package. This keeps the heavy-dependency stores
+// (postgres, redis) from taking a runtime dependency on @noetaris/harness-store
+// just to obtain error classes. Consumers catch these by class within each
+// package's own public API; identity is not shared across package boundaries.
+
 /**
  * Thrown by {@link InMemorySessionStore.branch} and {@link LocalFileSessionStore.branch}
  * when no run with the requested `runId` exists in the session's history.
